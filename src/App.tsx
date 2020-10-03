@@ -1,143 +1,56 @@
 import React from "react";
-
-type ProgressValue<T> =
-  | { inProgress: true; value: null }
-  | { inProgress: false; value: T };
-
-type JsonType =
-  | {
-      type: "error";
-      value: unknown;
-    }
-  | {
-      type: "ocr";
-      value: OCRResponse;
-    }
-  | {
-      type: "read";
-      value: ReadResponse;
-    }
-  | {
-      type: "none";
-    };
-
-type BoundingIdentity =
-  | {
-      type: "area";
-      index: number;
-    }
-  | {
-      type: "char";
-      index: number;
-    };
-
-type Point = [x: number, y: number];
-
-type RectPoints = [
-  leftTop: Point,
-  leftBottom: Point,
-  rightBottom: Point,
-  rightTop: Point
-];
-
-interface OCRResponse {
-  regions: {
-    boundingBox: string; // ex: "111,86,1061,559"
-    lines: {
-      boundingBox: string; // ex: "111,86,219,29"
-      words: {
-        boundingBox: string; // ex: "111,86,28,29"
-        text: string; // ex: "あ"
-      }[];
-    }[];
-  }[];
-}
-
-interface ReadResponse {
-  analyzeResult: {
-    readResults: {
-      lines: {
-        boundingBox: number[]; // ex: [624, 199, 712, 199, 712, 223, 624, 223]
-        text: string; // ex: "40.00kcal"
-        words: {
-          boundingBox: number[]; // ex: [624, 199, 712, 199, 712, 223, 624, 223]
-          text: string; // ex: "40.00kcal"
-          confidence: number; // ex: 0.700
-        }[];
-      }[];
-    }[];
-  };
-}
+import {
+  ocrResponseToAreaBoundaryRectPointsArray,
+  ocrResponseToWordBoundaryRectPointsArray,
+  readResponseToAreaBoundaryRectPointsArray,
+  readResponseToWordBoundaryRectPointsArray,
+} from "./domain";
+import { BoundingIdentity, JsonType, ProgressValue, RectPoints } from "./types";
 
 const CanvasHeight = 720;
 const CanvasWidth = 1280;
 
-const ocrBoundingBoxToRectPoints = (b: string): RectPoints => {
-  const tops = b.split(",").map((v) => parseInt(v, 10));
-  const lt = [tops[0], tops[1]] as Point;
-  const lb = [tops[0], tops[1] + tops[3]] as Point;
-  const rb = [tops[0] + tops[2], tops[1] + tops[3]] as Point;
-  const rt = [tops[0] + tops[2], tops[1]] as Point;
-  return [lt, lb, rb, rt] as RectPoints;
+const drawSpeechBubbleWithText = (
+  context: CanvasRenderingContext2D,
+  rect: RectPoints,
+  text: string,
+  scale: number
+) => {
+  context.beginPath();
+  context.textAlign = "center";
+  const leftTop = rect[0];
+  const rightTop = rect[3];
+  const x = (leftTop[0] + rightTop[0]) / 2 / scale;
+  const y = (leftTop[1] + rightTop[1]) / 2 / scale;
+
+  // ref: https://lab.syncer.jp/Web/JavaScript/Canvas/5/
+  const fontSize = 24;
+  context.font = `bold ${fontSize}px Arial, meiryo, sans-serif`;
+  context.fillStyle = "rgba(255, 255, 255, 0.8)";
+  const size = context.measureText(text);
+  const margin = 8;
+  context.moveTo(x, y);
+  context.lineTo(x + 15, y - 15);
+  context.lineTo(x + size.width / 2 + margin, y - 15);
+  context.lineTo(x + size.width / 2 + margin, y - 15 - fontSize - margin * 2);
+  context.lineTo(x - size.width / 2 - margin, y - 15 - fontSize - margin * 2);
+  context.lineTo(x - size.width / 2 - margin, y - 15);
+  context.lineTo(x - 15, y - 15);
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = "rgb(0, 0, 0)";
+  context.fillText(text, x, y - 15 - margin);
 };
 
-const readBoundingBoxToRectPoints = (tops: number[]): RectPoints => {
-  const lt = [tops[0], tops[1]] as Point;
-  const rt = [tops[2], tops[3]] as Point;
-  const rb = [tops[4], tops[5]] as Point;
-  const lb = [tops[6], tops[7]] as Point;
-  return [lt, lb, rb, rt] as RectPoints;
-};
-
-const ocrResponseToAreaBoundaryRectPointsArray = (
-  response: OCRResponse
-): { rect: RectPoints; text: null }[] => {
-  return response.regions[0].lines
-    .map((v) => ({ boundingBox: v.boundingBox, text: null }))
-    .map((v) => ({
-      rect: ocrBoundingBoxToRectPoints(v.boundingBox),
-      text: v.text,
-    }));
-};
-
-const ocrResponseToWordBoundaryRectPointsArray = (
-  response: OCRResponse
-): { rect: RectPoints; text: string }[] => {
-  return response.regions[0].lines
-    .map((v) =>
-      v.words.map((vv) => ({ boundingBox: vv.boundingBox, text: vv.text }))
+const toPolygonPoints = (rect: RectPoints, scale: number): string =>
+  `${rect
+    .reduce(
+      (prev, next) => [...prev, ...next].map((v) => v / scale),
+      [] as number[]
     )
-    .reduce((a, b) => [...a, ...b])
-    .map((v) => ({
-      rect: ocrBoundingBoxToRectPoints(v.boundingBox),
-      text: v.text,
-    }));
-};
-
-const readResponseToAreaBoundaryRectPointsArray = (
-  response: ReadResponse
-): { rect: RectPoints; text: string }[] => {
-  return response.analyzeResult.readResults[0].lines
-    .map((v) => ({ boundingBox: v.boundingBox, text: v.text }))
-    .map((v) => ({
-      rect: readBoundingBoxToRectPoints(v.boundingBox),
-      text: v.text,
-    }));
-};
-
-const readResponseToWordBoundaryRectPointsArray = (
-  response: ReadResponse
-): { rect: RectPoints; text: string }[] => {
-  return response.analyzeResult.readResults[0].lines
-    .map((v) =>
-      v.words.map((vv) => ({ boundingBox: vv.boundingBox, text: vv.text }))
-    )
-    .reduce((a, b) => [...a, ...b])
-    .map((v) => ({
-      rect: readBoundingBoxToRectPoints(v.boundingBox),
-      text: v.text,
-    }));
-};
+    .join(", ")}`;
 
 export const App: React.FC<{}> = () => {
   const baseImageCanvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -289,14 +202,13 @@ export const App: React.FC<{}> = () => {
   React.useEffect(() => {
     if (progressImage.inProgress) {
       setScale(1.0);
-    } else {
-      const img = progressImage.value;
-      const { height, width } = img;
-      const maybeWidthScale = width / CanvasWidth > 1 ? width / CanvasWidth : 1;
-      const maybeHeighScale =
-        height / CanvasHeight > 1 ? height / CanvasHeight : 1;
-      setScale(Math.max(maybeWidthScale, maybeHeighScale));
+      return;
     }
+    const { height, width } = progressImage.value;
+    const maybeWidthScale = width / CanvasWidth > 1 ? width / CanvasWidth : 1;
+    const maybeHeighScale =
+      height / CanvasHeight > 1 ? height / CanvasHeight : 1;
+    setScale(Math.max(maybeWidthScale, maybeHeighScale));
   }, [progressImage]);
 
   // NOTE: 処理対象の画像の読み込み
@@ -372,33 +284,12 @@ export const App: React.FC<{}> = () => {
       return;
     }
 
-    context.beginPath();
-    context.textAlign = "center";
-    const leftTop = tooltipContent.rect[0];
-    const rightTop = tooltipContent.rect[3];
-    const x = (leftTop[0] + rightTop[0]) / 2 / scale;
-    const y = (leftTop[1] + rightTop[1]) / 2 / scale;
-
-    // ref: https://lab.syncer.jp/Web/JavaScript/Canvas/5/
-    const fontSize = 24;
-    context.font = `bold ${fontSize}px Arial, meiryo, sans-serif`;
-    context.fillStyle = "rgba(255, 255, 255, 0.8)";
-    const size = context.measureText(tooltipContent.text);
-    // 吹き出しっぽいの、マジックナンバーは雰囲気
-    context.moveTo(x, y);
-    context.lineTo(x + 15, y - 15);
-    context.lineTo(x + size.width / 2 + 8, y - 15);
-    context.lineTo(x + size.width / 2 + 8, y - 15 - fontSize - 16);
-    context.lineTo(x - size.width / 2 - 8, y - 15 - fontSize - 16);
-    context.lineTo(x - size.width / 2 - 8, y - 15);
-    context.lineTo(x - 15, y - 15);
-    context.closePath();
-    context.fill();
-    context.stroke();
-
-    // 確認のためレンダリング
-    context.fillStyle = "rgb(0, 0, 0)";
-    context.fillText(tooltipContent.text, x, y - 15 - 8);
+    drawSpeechBubbleWithText(
+      context,
+      tooltipContent.rect,
+      tooltipContent.text,
+      scale
+    );
   }, [tooltipContent, scale]);
 
   return (
@@ -433,12 +324,7 @@ export const App: React.FC<{}> = () => {
           {areaBoundaries.map((v, i) => (
             <polygon
               key={i}
-              points={`${v.rect
-                .reduce(
-                  (prev, next) => [...prev, ...next].map((v) => v / scale),
-                  [] as number[]
-                )
-                .join(", ")}`}
+              points={toPolygonPoints(v.rect, scale)}
               style={{ fill: "transparent", stroke: "red", strokeWidth: 2 }}
               onMouseEnter={() =>
                 setVisibleTooltipIdentity({ type: "area", index: i })
@@ -460,12 +346,7 @@ export const App: React.FC<{}> = () => {
           {charBoundaries.map((v, i) => (
             <polygon
               key={i}
-              points={`${v.rect
-                .reduce(
-                  (prev, next) => [...prev, ...next].map((v) => v / scale),
-                  [] as number[]
-                )
-                .join(", ")}`}
+              points={toPolygonPoints(v.rect, scale)}
               style={{ fill: "transparent", stroke: "blue", strokeWidth: 2 }}
               onMouseEnter={() =>
                 setVisibleTooltipIdentity({ type: "char", index: i })
