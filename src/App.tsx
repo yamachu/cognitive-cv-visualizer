@@ -21,6 +21,16 @@ type JsonType =
       type: "none";
     };
 
+type BoundingIdentity =
+  | {
+      type: "area";
+      index: number;
+    }
+  | {
+      type: "char";
+      index: number;
+    };
+
 type Point = [x: number, y: number];
 
 type RectPoints = [
@@ -62,19 +72,6 @@ interface ReadResponse {
 const CanvasHeight = 720;
 const CanvasWidth = 1280;
 
-const drawRect = (
-  context: CanvasRenderingContext2D,
-  rectPoints: RectPoints
-) => {
-  context.beginPath();
-  context.moveTo(...rectPoints[0]);
-  context.lineTo(...rectPoints[1]);
-  context.lineTo(...rectPoints[2]);
-  context.lineTo(...rectPoints[3]);
-  context.closePath();
-  context.stroke();
-};
-
 const ocrBoundingBoxToRectPoints = (b: string): RectPoints => {
   const tops = b.split(",").map((v) => parseInt(v, 10));
   const lt = [tops[0], tops[1]] as Point;
@@ -94,42 +91,57 @@ const readBoundingBoxToRectPoints = (tops: number[]): RectPoints => {
 
 const ocrResponseToAreaBoundaryRectPointsArray = (
   response: OCRResponse
-): RectPoints[] => {
+): { rect: RectPoints; text: null }[] => {
   return response.regions[0].lines
-    .map((v) => v.boundingBox)
-    .map(ocrBoundingBoxToRectPoints);
+    .map((v) => ({ boundingBox: v.boundingBox, text: null }))
+    .map((v) => ({
+      rect: ocrBoundingBoxToRectPoints(v.boundingBox),
+      text: v.text,
+    }));
 };
 
 const ocrResponseToWordBoundaryRectPointsArray = (
   response: OCRResponse
-): RectPoints[] => {
+): { rect: RectPoints; text: string }[] => {
   return response.regions[0].lines
-    .map((v) => v.words.map((vv) => vv.boundingBox))
+    .map((v) =>
+      v.words.map((vv) => ({ boundingBox: vv.boundingBox, text: vv.text }))
+    )
     .reduce((a, b) => [...a, ...b])
-    .map(ocrBoundingBoxToRectPoints);
+    .map((v) => ({
+      rect: ocrBoundingBoxToRectPoints(v.boundingBox),
+      text: v.text,
+    }));
 };
 
 const readResponseToAreaBoundaryRectPointsArray = (
   response: ReadResponse
-): RectPoints[] => {
+): { rect: RectPoints; text: string }[] => {
   return response.analyzeResult.readResults[0].lines
-    .map((v) => v.boundingBox)
-    .map(readBoundingBoxToRectPoints);
+    .map((v) => ({ boundingBox: v.boundingBox, text: v.text }))
+    .map((v) => ({
+      rect: readBoundingBoxToRectPoints(v.boundingBox),
+      text: v.text,
+    }));
 };
 
 const readResponseToWordBoundaryRectPointsArray = (
   response: ReadResponse
-): RectPoints[] => {
+): { rect: RectPoints; text: string }[] => {
   return response.analyzeResult.readResults[0].lines
-    .map((v) => v.words.map((vv) => vv.boundingBox))
+    .map((v) =>
+      v.words.map((vv) => ({ boundingBox: vv.boundingBox, text: vv.text }))
+    )
     .reduce((a, b) => [...a, ...b])
-    .map(readBoundingBoxToRectPoints);
+    .map((v) => ({
+      rect: readBoundingBoxToRectPoints(v.boundingBox),
+      text: v.text,
+    }));
 };
 
 export const App: React.FC<{}> = () => {
   const baseImageCanvasRef = React.useRef<HTMLCanvasElement>(null);
-  const areaCanvasRef = React.useRef<HTMLCanvasElement>(null);
-  const charCanvasRef = React.useRef<HTMLCanvasElement>(null);
+  const tooltipRenderCanvasRef = React.useRef<HTMLCanvasElement>(null);
   const divRef = React.useRef<HTMLDivElement>(null);
 
   const [progressImage, setProgressImage] = React.useState<
@@ -139,6 +151,7 @@ export const App: React.FC<{}> = () => {
 
   const [showArea, setShowArea] = React.useState(true);
   const [showCharArea, setShowCharArea] = React.useState(true);
+  const [showTooltip, setShowTooltip] = React.useState(true);
 
   const [parsedJson, setParsedJson] = React.useState<ProgressValue<JsonType>>({
     inProgress: false,
@@ -147,6 +160,27 @@ export const App: React.FC<{}> = () => {
     },
   });
   const [inputAreaValue, setInputAreaValue] = React.useState("");
+  const [areaBoundaries, setAreaBoundaries] = React.useState<
+    { rect: RectPoints; text: string | null }[]
+  >([]);
+  const [charBoundaries, setCharBoundaries] = React.useState<
+    { rect: RectPoints; text: string }[]
+  >([]);
+  const [
+    visibleTooltipIdentity,
+    setVisibleTooltipIdentity,
+  ] = React.useState<BoundingIdentity | null>(null);
+  const tooltipContent = React.useMemo(() => {
+    if (visibleTooltipIdentity === null) {
+      return null;
+    }
+    if (visibleTooltipIdentity.type === "area") {
+      return areaBoundaries[visibleTooltipIdentity.index] ?? null;
+    } else if (visibleTooltipIdentity.type === "char") {
+      return charBoundaries[visibleTooltipIdentity.index] ?? null;
+    }
+    return null;
+  }, [visibleTooltipIdentity, areaBoundaries, charBoundaries]);
 
   const onParseInputClicked = React.useCallback((value: string) => {
     try {
@@ -304,57 +338,68 @@ export const App: React.FC<{}> = () => {
       parsedJson.value.type === "error" ||
       parsedJson.value.type === "none"
     ) {
+      setAreaBoundaries([]);
       return;
     }
-    const canvas = areaCanvasRef.current;
-    if (canvas === null) {
-      return;
-    }
-    const context = canvas.getContext("2d");
-    if (context === null) {
-      return;
-    }
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = "red";
     if (parsedJson.value.type === "read") {
-      readResponseToAreaBoundaryRectPointsArray(
-        parsedJson.value.value
-      ).forEach((v) => drawRect(context, v));
+      setAreaBoundaries(
+        readResponseToAreaBoundaryRectPointsArray(parsedJson.value.value)
+      );
+      setCharBoundaries(
+        readResponseToWordBoundaryRectPointsArray(parsedJson.value.value)
+      );
     } else if (parsedJson.value.type === "ocr") {
-      ocrResponseToAreaBoundaryRectPointsArray(
-        parsedJson.value.value
-      ).forEach((v) => drawRect(context, v));
+      setAreaBoundaries(
+        ocrResponseToAreaBoundaryRectPointsArray(parsedJson.value.value)
+      );
+      setCharBoundaries(
+        ocrResponseToWordBoundaryRectPointsArray(parsedJson.value.value)
+      );
     }
   }, [parsedJson]);
 
   React.useEffect(() => {
-    if (
-      parsedJson.inProgress ||
-      parsedJson.value.type === "error" ||
-      parsedJson.value.type === "none"
-    ) {
-      return;
-    }
-    const canvas = charCanvasRef.current;
+    const canvas = tooltipRenderCanvasRef.current;
     if (canvas === null) {
       return;
     }
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d", { alpha: true });
     if (context === null) {
       return;
     }
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = "blue";
-    if (parsedJson.value.type === "read") {
-      readResponseToWordBoundaryRectPointsArray(
-        parsedJson.value.value
-      ).forEach((v) => drawRect(context, v));
-    } else if (parsedJson.value.type === "ocr") {
-      ocrResponseToWordBoundaryRectPointsArray(
-        parsedJson.value.value
-      ).forEach((v) => drawRect(context, v));
+    if (tooltipContent === null || tooltipContent.text === null) {
+      return;
     }
-  }, [parsedJson]);
+
+    context.beginPath();
+    context.textAlign = "center";
+    const leftTop = tooltipContent.rect[0];
+    const rightTop = tooltipContent.rect[3];
+    const x = (leftTop[0] + rightTop[0]) / 2 / scale;
+    const y = (leftTop[1] + rightTop[1]) / 2 / scale;
+
+    // ref: https://lab.syncer.jp/Web/JavaScript/Canvas/5/
+    const fontSize = 24;
+    context.font = `bold ${fontSize}px Arial, meiryo, sans-serif`;
+    context.fillStyle = "rgba(255, 255, 255, 0.8)";
+    const size = context.measureText(tooltipContent.text);
+    // 吹き出しっぽいの、マジックナンバーは雰囲気
+    context.moveTo(x, y);
+    context.lineTo(x + 15, y - 15);
+    context.lineTo(x + size.width / 2 + 8, y - 15);
+    context.lineTo(x + size.width / 2 + 8, y - 15 - fontSize - 16);
+    context.lineTo(x - size.width / 2 - 8, y - 15 - fontSize - 16);
+    context.lineTo(x - size.width / 2 - 8, y - 15);
+    context.lineTo(x - 15, y - 15);
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    // 確認のためレンダリング
+    context.fillStyle = "rgb(0, 0, 0)";
+    context.fillText(tooltipContent.text, x, y - 15 - 8);
+  }, [tooltipContent, scale]);
 
   return (
     <div>
@@ -375,25 +420,70 @@ export const App: React.FC<{}> = () => {
           height={CanvasHeight}
           ref={baseImageCanvasRef}
         ></canvas>
-        <canvas
+        <svg
+          width={CanvasWidth}
+          height={CanvasHeight}
+          viewBox={`0 0 ${CanvasWidth} ${CanvasHeight}`}
           style={{
             zIndex: 2,
             position: "absolute",
             display: showArea ? undefined : "none",
           }}
+        >
+          {areaBoundaries.map((v, i) => (
+            <polygon
+              key={i}
+              points={`${v.rect
+                .reduce(
+                  (prev, next) => [...prev, ...next].map((v) => v / scale),
+                  [] as number[]
+                )
+                .join(", ")}`}
+              style={{ fill: "transparent", stroke: "red", strokeWidth: 2 }}
+              onMouseEnter={() =>
+                setVisibleTooltipIdentity({ type: "area", index: i })
+              }
+              onMouseLeave={() => setVisibleTooltipIdentity(null)}
+            />
+          ))}
+        </svg>
+        <svg
           width={CanvasWidth}
           height={CanvasHeight}
-          ref={areaCanvasRef}
-        ></canvas>
-        <canvas
+          viewBox={`0 0 ${CanvasWidth} ${CanvasHeight}`}
           style={{
             zIndex: 3,
             position: "absolute",
             display: showCharArea ? undefined : "none",
           }}
+        >
+          {charBoundaries.map((v, i) => (
+            <polygon
+              key={i}
+              points={`${v.rect
+                .reduce(
+                  (prev, next) => [...prev, ...next].map((v) => v / scale),
+                  [] as number[]
+                )
+                .join(", ")}`}
+              style={{ fill: "transparent", stroke: "blue", strokeWidth: 2 }}
+              onMouseEnter={() =>
+                setVisibleTooltipIdentity({ type: "char", index: i })
+              }
+              onMouseLeave={() => setVisibleTooltipIdentity(null)}
+            />
+          ))}
+        </svg>
+        <canvas
+          style={{
+            pointerEvents: "none",
+            zIndex: 4,
+            position: "absolute",
+            display: showTooltip ? undefined : "none",
+          }}
           width={CanvasWidth}
           height={CanvasHeight}
-          ref={charCanvasRef}
+          ref={tooltipRenderCanvasRef}
         ></canvas>
       </div>
       <button onClick={() => setShowArea((v) => !v)}>{`大枠BoundaryBoxを${
@@ -401,6 +491,9 @@ export const App: React.FC<{}> = () => {
       }`}</button>
       <button onClick={() => setShowCharArea((v) => !v)}>{`文字BoundaryBoxを${
         showCharArea ? "非表示" : "表示"
+      }`}</button>
+      <button onClick={() => setShowTooltip((v) => !v)}>{`認識結果を${
+        showTooltip ? "非表示" : "表示"
       }`}</button>
       <p style={{ display: "inline", color: "red" }}>
         {!parsedJson.inProgress && parsedJson.value.type === "error"
