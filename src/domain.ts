@@ -1,21 +1,30 @@
 import { OCRResponse, Point, ReadResponse, RectPoints } from "./types";
 
-// Todo: この順番とも限らない時があるので、いい感じにclockwiseに出来るような何かを考える
 const ocrBoundingBoxToRectPoints = (b: string): RectPoints => {
   const tops = b.split(",").map((v) => parseInt(v, 10));
-  const lt = [tops[0], tops[1]] as Point;
-  const lb = [tops[0], tops[1] + tops[3]] as Point;
-  const rb = [tops[0] + tops[2], tops[1] + tops[3]] as Point;
-  const rt = [tops[0] + tops[2], tops[1]] as Point;
-  return [lt, lb, rb, rt] as RectPoints;
+  const maybeLT = [tops[0], tops[1]] as Point;
+  const maybeLB = [tops[0], tops[1] + tops[3]] as Point;
+  const maybeRB = [tops[0] + tops[2], tops[1] + tops[3]] as Point;
+  const maybeRT = [tops[0] + tops[2], tops[1]] as Point;
+  const isMaybeLTisLT = maybeLT[0] <= maybeRB[0] && maybeLT[1] <= maybeRB[1];
+  const maybeRectPoints = [maybeLT, maybeLB, maybeRB, maybeRT] as RectPoints;
+  const fixedLTStartPoints = maybeRectPoints
+    .slice(-1)
+    .concat(maybeRectPoints.slice(0, -1)) as RectPoints;
+  return isMaybeLTisLT ? maybeRectPoints : fixedLTStartPoints;
 };
 
 const readBoundingBoxToRectPoints = (tops: number[]): RectPoints => {
-  const lt = [tops[0], tops[1]] as Point;
-  const rt = [tops[2], tops[3]] as Point;
-  const rb = [tops[4], tops[5]] as Point;
-  const lb = [tops[6], tops[7]] as Point;
-  return [lt, lb, rb, rt] as RectPoints;
+  const maybeLT = [tops[0], tops[1]] as Point;
+  const maybeRT = [tops[2], tops[3]] as Point;
+  const maybeRB = [tops[4], tops[5]] as Point;
+  const maybeLB = [tops[6], tops[7]] as Point;
+  const isMaybeLTisLT = maybeLT[0] <= maybeRB[0] && maybeLT[1] <= maybeRB[1];
+  const maybeRectPoints = [maybeLT, maybeLB, maybeRB, maybeRT] as RectPoints;
+  const fixedLTStartPoints = maybeRectPoints
+    .slice(-1)
+    .concat(maybeRectPoints.slice(0, -1)) as RectPoints;
+  return isMaybeLTisLT ? maybeRectPoints : fixedLTStartPoints;
 };
 
 export const ocrResponseToAreaBoundaryRectPointsArray = (
