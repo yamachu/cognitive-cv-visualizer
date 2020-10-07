@@ -1,6 +1,7 @@
 // https://qiita.com/olt/items/3e3840db050414cde0ed
 const { argv } = require("process");
 const { build } = require("esbuild");
+const fs = require("fs");
 const path = require("path");
 
 const options = {
@@ -19,7 +20,24 @@ const options = {
   tsconfig: path.resolve(__dirname, "tsconfig.json"),
 };
 
-build(options).catch((err) => {
-  process.stderr.write(err.stderr);
-  process.exit(1);
-});
+build(options)
+  .then(
+    () =>
+      new Promise((resolve, reject) =>
+        fs.copyFile(
+          path.resolve(__dirname, "index.html"),
+          path.resolve(__dirname, "dist", "index.html"),
+          (err) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve();
+            }
+          }
+        )
+      )
+  )
+  .catch((err) => {
+    process.stderr.write(err.stderr);
+    process.exit(1);
+  });
