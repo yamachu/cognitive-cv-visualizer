@@ -12,7 +12,7 @@ import { BoundingIdentity, JsonType, ProgressValue, RectPoints } from "./types";
 const CanvasHeight = 720;
 const CanvasWidth = 1280;
 
-const HOST = "http://localhost:7071"; // Todo: replace build time...
+const HOST = process.env.API_HOST;
 
 const drawSpeechBubbleWithText = (
   context: CanvasRenderingContext2D,
