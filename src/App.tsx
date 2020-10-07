@@ -1,5 +1,7 @@
 import React from "react";
+import { callApi } from "./api";
 import {
+  dataURItoBlob,
   ocrResponseToAreaBoundaryRectPointsArray,
   ocrResponseToWordBoundaryRectPointsArray,
   readResponseToAreaBoundaryRectPointsArray,
@@ -9,6 +11,8 @@ import { BoundingIdentity, JsonType, ProgressValue, RectPoints } from "./types";
 
 const CanvasHeight = 720;
 const CanvasWidth = 1280;
+
+const HOST = "http://localhost:7071"; // Todo: replace build time...
 
 const drawSpeechBubbleWithText = (
   context: CanvasRenderingContext2D,
@@ -73,6 +77,10 @@ export const App: React.FC<{}> = () => {
     },
   });
   const [inputAreaValue, setInputAreaValue] = React.useState("");
+  const [endpointInput, setEndpointInput] = React.useState("");
+  const [subscriptionKeyInput, setSubscriptionKeyInput] = React.useState("");
+  const [apiCallResponseText, setApiCallResponseText] = React.useState("");
+
   const [areaBoundaries, setAreaBoundaries] = React.useState<
     { rect: RectPoints; text: string | null }[]
   >([]);
@@ -129,37 +137,68 @@ export const App: React.FC<{}> = () => {
       return;
     }
 
+    const formData = new FormData();
+    formData.append("subscriptionKey", subscriptionKeyInput);
+    formData.append("endpoint", endpointInput);
+    formData.append("file", dataURItoBlob(progressImage.value.src));
+
     const impl = async () => {
       setParsedJson({ inProgress: true, value: null });
-      await new Promise((resolve) => {
-        resolve(
+      setApiCallResponseText("");
+      callApi(
+        `${HOST}/api/HttpTriggerForOCRAPI`,
+        formData,
+        (j) => {
           setParsedJson({
             inProgress: false,
-            value: { type: "error", value: "not implemented" },
-          })
-        );
-      });
+            value: { type: "ocr", value: j },
+          });
+          setApiCallResponseText(JSON.stringify(j, null, "\t"));
+        },
+        (e) => {
+          setParsedJson({
+            inProgress: false,
+            value: { type: "error", value: (e as Error).message },
+          });
+        }
+      );
     };
+
     impl();
-  }, [progressImage]);
+  }, [progressImage, endpointInput, subscriptionKeyInput]);
   const onREADAPIAnalyticsClicked = React.useCallback(() => {
     if (progressImage.inProgress) {
       return;
     }
 
+    const formData = new FormData();
+    formData.append("subscriptionKey", subscriptionKeyInput);
+    formData.append("endpoint", endpointInput);
+    formData.append("file", dataURItoBlob(progressImage.value.src));
+
     const impl = async () => {
       setParsedJson({ inProgress: true, value: null });
-      await new Promise((resolve) => {
-        resolve(
+      setApiCallResponseText("");
+      callApi(
+        `${HOST}/api/HttpTriggerForReadAPI`,
+        formData,
+        (j) => {
           setParsedJson({
             inProgress: false,
-            value: { type: "error", value: "not implemented" },
-          })
-        );
-      });
+            value: { type: "read", value: j },
+          });
+          setApiCallResponseText(JSON.stringify(j, null, "\t"));
+        },
+        (e) => {
+          setParsedJson({
+            inProgress: false,
+            value: { type: "error", value: (e as Error).message },
+          });
+        }
+      );
     };
     impl();
-  }, [progressImage]);
+  }, [progressImage, endpointInput, subscriptionKeyInput]);
 
   // NOTE: Drag & Dropしてファイルを読み込んで画像を取り込む処理の設定
   React.useEffect(() => {
@@ -396,30 +435,47 @@ export const App: React.FC<{}> = () => {
           style={{
             display: "flex",
             flexDirection: "column",
-            visibility: "hidden", // Note: まだ実装できてないのでhidden
           }}
         >
           <div style={{ display: "flex", flexDirection: "row" }}>
             <label>
               {"サブスクリプションキー"}
-              <input />
+              <input
+                value={subscriptionKeyInput}
+                onChange={(ev) => setSubscriptionKeyInput(ev.target.value)}
+              />
             </label>
             <label>
               {"エンドポイント"}
-              <input />
+              <input
+                value={endpointInput}
+                onChange={(ev) => setEndpointInput(ev.target.value)}
+              />
             </label>
           </div>
-          <textarea value={""} readOnly style={{ flexGrow: 1, width: 640 }} />
+          <textarea
+            value={apiCallResponseText}
+            readOnly
+            style={{ flexGrow: 1, width: 640 }}
+          />
           <div style={{ display: "flex", flexDirection: "row" }}>
             <button
               onClick={onOCRAPIAnalyticsClicked}
-              disabled={[progressImage, parsedJson].some((v) => v.inProgress)}
+              disabled={
+                [progressImage, parsedJson].some((v) => v.inProgress) ||
+                endpointInput === "" ||
+                subscriptionKeyInput === ""
+              }
             >
               {"OCR APIで分析"}
             </button>
             <button
               onClick={onREADAPIAnalyticsClicked}
-              disabled={[progressImage, parsedJson].some((v) => v.inProgress)}
+              disabled={
+                [progressImage, parsedJson].some((v) => v.inProgress) ||
+                endpointInput === "" ||
+                subscriptionKeyInput === ""
+              }
             >
               {"READ APIで分析"}
             </button>
