@@ -4,7 +4,12 @@ const { build } = require("esbuild");
 const path = require("path");
 
 const options = {
-  define: { "process.env.NODE_ENV": process.env.NODE_ENV },
+  define: {
+    "process.env.NODE_ENV": process.env.NODE_ENV,
+    "process.env.API_HOST": JSON.stringify(
+      process.env.AZURE_FUNCTIONS_API_HOST ?? "http://localhost:7071"
+    ),
+  },
   entryPoints: [path.resolve(__dirname, "src/index.tsx")],
   minify: argv[2] === "production",
   bundle: true,
