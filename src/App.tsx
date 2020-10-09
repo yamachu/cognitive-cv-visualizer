@@ -441,6 +441,8 @@ export const App: React.FC<{}> = () => {
             <label>
               {"サブスクリプションキー"}
               <input
+                type={"password"}
+                autoComplete={"off"}
                 value={subscriptionKeyInput}
                 onChange={(ev) => setSubscriptionKeyInput(ev.target.value)}
               />
@@ -448,6 +450,8 @@ export const App: React.FC<{}> = () => {
             <label>
               {"エンドポイント"}
               <input
+                type={"password"}
+                autoComplete={"off"}
                 value={endpointInput}
                 onChange={(ev) => setEndpointInput(ev.target.value)}
               />
