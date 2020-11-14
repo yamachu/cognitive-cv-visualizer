@@ -60,7 +60,7 @@ namespace CVVisualizer.Core
             else
             {
                 var errorString = await response.Content.ReadAsStringAsync();
-                return (null, new Exception(JsonSerializer.Deserialize<string>(errorString)));
+                return (null, new Exception(errorString));
             }
         }
     }
