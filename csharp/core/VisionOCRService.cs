@@ -23,7 +23,7 @@ namespace CVVisualizer.Core
 
             var response = await client.SendAsync(request);
             var contentString = await response.Content.ReadAsStringAsync();
-            if (response.IsSuccessStatusCode) {
+            if (!response.IsSuccessStatusCode) {
                 throw new ArgumentException(contentString);
             }
             
