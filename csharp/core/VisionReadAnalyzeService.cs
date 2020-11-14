@@ -17,7 +17,7 @@ namespace CVVisualizer.Core
             var request = new HttpRequestMessage(HttpMethod.Post, $"{endpoint}{uriBase}?language=ja");
             request.Headers.Add("ContentType", "application/json");
             request.Headers.Add("Ocp-Apim-Subscription-Key", subscriptionKey);
-            
+
             using var content = new ByteArrayContent(image);
             content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
             request.Content = content;
