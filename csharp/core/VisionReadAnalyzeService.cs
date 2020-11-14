@@ -9,7 +9,7 @@ namespace CVVisualizer.Core
 {
     public static class VisionReadAnalyzeService
     {
-        readonly static string uriBase = "vision/v3.1/read/analyze";
+        readonly static string uriBase = "vision/v3.2-preview.1/read/analyze";
 
         public static async Task<string> AnalyzeAsync(HttpClient client, string endpoint, string subscriptionKey, byte[] image)
         {
