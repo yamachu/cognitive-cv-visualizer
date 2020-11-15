@@ -16,6 +16,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\core\core.csproj" />
+    <ProjectReference Include="..\core\CVVisualizer.Core.csproj" />
   </ItemGroup>
 </Project>
