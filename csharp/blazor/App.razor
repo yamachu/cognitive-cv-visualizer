@@ -1,10 +1,22 @@
-﻿<Router AppAssembly="@typeof(Program).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
-    </Found>
-    <NotFound>
-        <LayoutView Layout="@typeof(MainLayout)">
-            <p>Sorry, there's nothing at this address.</p>
-        </LayoutView>
-    </NotFound>
-</Router>
+﻿@using System.Net.Http
+@using CVVisualizer.Core
+
+@code {
+    protected override bool ShouldRender() => false;
+
+    private static HttpClient httpClient = new HttpClient();
+
+    [JSInvokable]
+    public static Task<string> RunOCR(string endpoint, string subscriptionKey, string imageBase64)
+    {
+        var image = Convert.FromBase64String(imageBase64);
+        return VisionOCRService.AnalyzeAsync(httpClient, endpoint, subscriptionKey, image);
+    }
+
+    [JSInvokable]
+    public static Task<string> RunRead(string endpoint, string subscriptionKey, string imageBase64)
+    {
+        var image = Convert.FromBase64String(imageBase64);
+        return VisionReadAnalyzeService.AnalyzeAsync(httpClient, endpoint, subscriptionKey, image);
+    }
+}
