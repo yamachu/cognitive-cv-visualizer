@@ -10,31 +10,36 @@ const options = {
     "process.env.API_HOST": JSON.stringify(
       process.env.AZURE_FUNCTIONS_API_HOST ?? "http://localhost:7071"
     ),
+    "process.env.IS_BLAZOR": !!process.env.IS_BLAZOR,
   },
   entryPoints: [path.resolve(__dirname, "src/index.tsx")],
   minify: argv[2] === "production",
   bundle: true,
   target: "es2016",
   platform: "browser",
-  outdir: path.resolve(__dirname, "dist"),
+  outdir: process.env.DIST ?? path.resolve(__dirname, "dist"),
   tsconfig: path.resolve(__dirname, "tsconfig.json"),
 };
+
+const nonDefaultOutdir = options.outdir !== path.resolve(__dirname, "dist");
 
 build(options)
   .then(
     () =>
       new Promise((resolve, reject) =>
-        fs.copyFile(
-          path.resolve(__dirname, "index.html"),
-          path.resolve(__dirname, "dist", "index.html"),
-          (err) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve();
-            }
-          }
-        )
+        nonDefaultOutdir
+          ? resolve()
+          : fs.copyFile(
+              path.resolve(__dirname, "index.html"),
+              path.resolve(__dirname, "dist", "index.html"),
+              (err) => {
+                if (err) {
+                  reject(err);
+                } else {
+                  resolve();
+                }
+              }
+            )
       )
   )
   .catch((err) => {
