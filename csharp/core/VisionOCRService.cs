@@ -13,7 +13,7 @@ namespace CVVisualizer.Core
         {
             // ref: https://docs.microsoft.com/ja-jp/azure/cognitive-services/computer-vision/quickstarts/csharp-print-text#create-and-run-the-sample-application
             var requestParameters = "language=ja&detectOrientation=true";
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{endpoint}{uriBase}?${requestParameters}");
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{endpoint}{uriBase}?{requestParameters}");
             request.Headers.Add("ContentType", "application/json");
             request.Headers.Add("Ocp-Apim-Subscription-Key", subscriptionKey);
             
