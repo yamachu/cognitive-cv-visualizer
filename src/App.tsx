@@ -1,5 +1,5 @@
 import React from "react";
-import { callApi } from "./api";
+import { Endpoint, VisionAPIExecutor } from "./contract";
 import {
   dataURItoBlob,
   ocrResponseToAreaBoundaryRectPointsArray,
@@ -11,8 +11,6 @@ import { BoundingIdentity, JsonType, ProgressValue, RectPoints } from "./types";
 
 const CanvasHeight = 720;
 const CanvasWidth = 1280;
-
-const HOST = process.env.API_HOST;
 
 const drawSpeechBubbleWithText = (
   context: CanvasRenderingContext2D,
@@ -56,7 +54,7 @@ const toPolygonPoints = (rect: RectPoints, scale: number): string =>
     )
     .join(", ")}`;
 
-export const App: React.FC<{}> = () => {
+export const App: React.FC<{ callApi: VisionAPIExecutor }> = ({ callApi }) => {
   const baseImageCanvasRef = React.useRef<HTMLCanvasElement>(null);
   const tooltipRenderCanvasRef = React.useRef<HTMLCanvasElement>(null);
   const divRef = React.useRef<HTMLDivElement>(null);
@@ -146,7 +144,7 @@ export const App: React.FC<{}> = () => {
       setParsedJson({ inProgress: true, value: null });
       setApiCallResponseText("");
       callApi(
-        `${HOST}/api/HttpTriggerForOCRAPI`,
+        Endpoint.OCR,
         formData,
         (j) => {
           setParsedJson({
@@ -180,7 +178,7 @@ export const App: React.FC<{}> = () => {
       setParsedJson({ inProgress: true, value: null });
       setApiCallResponseText("");
       callApi(
-        `${HOST}/api/HttpTriggerForReadAPI`,
+        Endpoint.Read,
         formData,
         (j) => {
           setParsedJson({

@@ -1,10 +1,12 @@
-export const callApi = (
-  endpoint: string,
+import { Endpoint, VisionAPIExecutor } from "./contract";
+
+export const createVisionAPIExecutor = (host: string): VisionAPIExecutor => (
+  endpoint: Endpoint,
   formData: FormData,
   cbThen: (json: any) => void,
   cbCatch: (e: any) => void
 ) =>
-  fetch(endpoint, {
+  fetch(`${host}${endpoint}`, {
     method: "POST",
     body: formData,
     mode: "cors",
