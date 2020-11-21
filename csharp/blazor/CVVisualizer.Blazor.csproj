@@ -14,12 +14,4 @@
     <ProjectReference Include="..\core\CVVisualizer.Core.csproj" />
   </ItemGroup>
 
-  <Target Name="CustomAfterRestore" AfterTargets="Restore">
-    <Exec Command="pushd ../../ ; npm install ; popd" />
-  </Target>
-
-  <Target Name="CustomAfterBuild" AfterTargets="Build">
-    <Exec Command="IS_BLAZOR=true DIST=./wwwroot node ../../build.js production" />
-  </Target>
-
 </Project>
