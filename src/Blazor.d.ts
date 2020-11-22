@@ -10,10 +10,11 @@ import { Virtualize } from "microsoft.aspnetcore.components.web.js/Virtualize";
 
 declare global {
   interface Window {
+    // for blazor.webassembly.js
     Blazor: {
+      // from Boot.WebAssembly.ts
       start: (options?: Partial<WebAssemblyStartOptions>) => Promise<void>;
 
-      // undocumented...
       platform: Platform;
 
       // from GlobalExports.ts
